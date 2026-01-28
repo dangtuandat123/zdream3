@@ -10,6 +10,24 @@
 Nền tảng tạo ảnh AI cho người dùng phổ thông. Người dùng chọn **Style** (mẫu phong cách), chọn vài tùy chọn đơn giản, hệ thống tự ghép prompt và gọi API nhà cung cấp AI để tạo ảnh. Hệ thống có **ví nội bộ (credits/xu)**, lịch sử giao dịch, lịch sử ảnh và khu vực quản trị để cấu hình Style, model AI, giá, API key, v.v.  
 Kiến trúc triển khai mục tiêu là **API‑first**: backend cung cấp API JSON; frontend là **SPA React CSR**.
 
+### 1.1. Tài liệu kỹ thuật bổ sung (agent‑ready)
+- `ARCHITECTURE.md` — kiến trúc tổng thể và luồng dữ liệu.
+- `DATA_MODEL.md` — mô hình dữ liệu + constraints.
+- `API_SPEC.md` — hợp đồng API nội bộ.
+- `USER_FLOWS.md` — luồng người dùng.
+- `UX_COPY.md` — microcopy/label/error chuẩn.
+- `INTEGRATIONS.md` — tích hợp BFL/VietQR/MinIO.
+- `ENV.md` — biến môi trường và cấu hình.
+- `NON_FUNCTIONAL.md` — yêu cầu phi chức năng.
+- `SECURITY.md` — tiêu chuẩn bảo mật.
+- `ERROR_MATRIX.md` — mapping lỗi → UX + hành động.
+- `JOB_WORKERS.md` — queue jobs & scheduler.
+- `PERMISSIONS.md` — ma trận quyền.
+- `MIGRATIONS_NOTES.md` — seed/migration notes.
+- `TEST_PLAN.md` — kế hoạch test.
+- `UI_GUIDE.md` — hướng dẫn UI.
+- `MODEL_CAPABILITIES.md` — capability matrix baseline.
+
 ### Công nghệ/tích hợp đang dùng và vai trò
 - **Backend (Laravel 12)**: xử lý API, xác thực (Sanctum cho SPA), business logic, job queue, giao tiếp DB.
 - **Frontend (React CSR)**: giao diện SPA, tương tác realtime (polling), form/UX.
