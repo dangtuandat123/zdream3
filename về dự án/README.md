@@ -22,6 +22,7 @@ Kiến trúc triển khai mục tiêu là **API‑first**: backend cung cấp AP
 - **Trải nghiệm nhanh**: hiển thị trạng thái xử lý, phản hồi rõ ràng.
 - **Kinh tế minh bạch**: credits bị trừ/hoàn lại có log và idempotency.
 - **Quản trị linh hoạt**: admin cấu hình Style, tag, model, thông số nâng cao.
+- **Không hardcode model**: danh sách model + capability sync tự động từ provider.
 
 ---
 
@@ -33,6 +34,7 @@ Kiến trúc triển khai mục tiêu là **API‑first**: backend cung cấp AP
 - **Credits/Xu**: đơn vị tiền nội bộ để tính phí tạo ảnh.
 - **Tag/Chủ đề**: nhãn để lọc/hiển thị Style.
 - **Image Slots**: các ô upload ảnh tham chiếu có thể bắt buộc.
+- **Model Registry**: danh sách model, schema tham số, giới hạn, capability (sync từ provider).
 
 ---
 
@@ -46,7 +48,8 @@ Kiến trúc triển khai mục tiêu là **API‑first**: backend cung cấp AP
    - (Tuỳ Style) nhập mô tả bổ sung.
    - (Tuỳ model) chọn tỉ lệ khung hình hoặc kích thước tuỳ chỉnh.
    - (Tuỳ model) bật các tuỳ chọn nâng cao (seed, steps, guidance, format…).
-   - (Tuỳ model) tải ảnh tham chiếu theo các **image slots**.
+   - (Tuỳ model) tải ảnh tham chiếu theo các **image slots** (i2i, multi‑reference).
+   - (Tuỳ model) nhập **mask** (inpainting) hoặc thông số **expand** (outpainting).
 4) Nhấn **Tạo ảnh**:
    - Hệ thống kiểm tra credits và validate dữ liệu.
    - Tạo bản ghi `generated_images` trạng thái `processing`, lưu `estimated_cost` (nếu có).
@@ -96,6 +99,9 @@ Kiến trúc triển khai mục tiêu là **API‑first**: backend cung cấp AP
 - Tuỳ chọn nâng cao (chỉ hiện khi model hỗ trợ):
   - seed, steps, guidance, safety_tolerance, output_format, prompt_upsampling, raw, image_prompt_strength…
 - Khu vực upload ảnh tham chiếu theo các slot.
+- Nếu model là **image‑to‑image**: bắt buộc có ảnh đầu vào.
+- Nếu model là **inpainting**: yêu cầu mask (ảnh đen/trắng hoặc alpha).
+- Nếu model là **outpainting**: yêu cầu thông số expand (top/bottom/left/right).
 - Trạng thái tạo ảnh: pending/processing/ready/failed/moderated.
 - Hiển thị ảnh kết quả qua URL nội bộ (proxy); nhắc **tải về** nếu cần.
 
@@ -147,6 +153,12 @@ Kiến trúc triển khai mục tiêu là **API‑first**: backend cung cấp AP
 - Thông tin nạp tiền (tài khoản ngân hàng).
 - Cấu hình giới hạn ảnh, timeout, v.v.
 
+### 5.7. Model Registry (sync tự động)
+- Xem danh sách model đang khả dụng từ provider (read‑only).
+- Bật/tắt model cho hệ thống.
+- Gán nhãn “t2i / i2i / inpaint / outpaint / finetune”.
+- Lưu override (nếu cần) cho giới hạn hoặc UI label.
+
 ---
 
 ## 6) Thiết kế hệ thống (trung lập công nghệ)
@@ -197,9 +209,20 @@ Kiến trúc triển khai mục tiêu là **API‑first**: backend cung cấp AP
 - Frontend gửi `withCredentials` + `X-XSRF-TOKEN`.
 - Route API bảo vệ bằng `auth:sanctum`.
 
+### 6.5. Model Registry & Capability Matrix (auto)
+- Backend định kỳ **sync danh sách model + schema tham số** từ provider (không hardcode).
+- Sinh **capability matrix** để UI hiển thị đúng controls theo model.
+- Cache danh sách model; fallback dùng bản gần nhất nếu provider lỗi.
+
 ---
 
 ## 7) Tích hợp nhà cung cấp AI
+
+### 7.0. Danh sách model (dynamic, không hardcode)
+- Lấy danh sách model + tham số từ **provider API/OpenAPI** (sync định kỳ).
+- Frontend gọi `/api/models` để render UI (capabilities‑driven).
+- Mọi thay đổi model/param không cần sửa code frontend.
+- Lưu `base_url` theo từng model (một số endpoint có server riêng).
 
 ### 7.1. Hợp đồng API (mô tả chức năng)
 - **Tạo task**: gửi payload gồm prompt + tham số (ratio/size/seed/…).
@@ -276,6 +299,11 @@ Kiến trúc triển khai mục tiêu là **API‑first**: backend cung cấp AP
 ### 8.8. Hạ tầng hệ thống
 - `jobs`, `failed_jobs`, `personal_access_tokens`, `password_reset_tokens`…
 
+### 8.9. `provider_models` (khuyến nghị)
+- `provider`, `model_slug`, `endpoint`, `category` (t2i/i2i/inpaint/outpaint/finetune).
+- `capabilities` (JSON), `param_schema` (JSON), `limits` (JSON).
+- `is_active`, `label`, `version`, `synced_at`.
+
 ---
 
 ## 9) Cấu hình & tham số hệ thống
@@ -290,6 +318,7 @@ Các cấu hình nên đặt trong **settings** hoặc môi trường vận hàn
 - **Image Proxy**: Bắt buộc proxy ảnh qua Storage nội bộ (tránh lỗi CORS và link hết hạn).
 - Storage: cấu hình **S3/MinIO disk**, TTL pre‑signed URL, CDN (nếu có).
 - Prompt limit theo model (vd: Kontext ~512 tokens).
+- Cron/scheduler: **sync model registry** từ provider theo chu kỳ.
 - Thông tin nạp tiền (ngân hàng, QR, nội dung chuyển khoản).
 - Số ngày ảnh có thể hết hạn/hiển thị cảnh báo.
 
@@ -338,6 +367,7 @@ Các cấu hình nên đặt trong **settings** hoặc môi trường vận hàn
 ## 13) API nội bộ (khung đề xuất)
 
 - Tối thiểu cần các nhóm endpoint: Style (list/detail), Studio (create/poll), History, Wallet (balance/topup/callback), Admin (CRUD).
+- Bổ sung endpoint **Models**: `/api/models` (list + schema), `/api/models/{slug}` (detail).
 - Mỗi endpoint cần mô tả: method, path, auth, request/response, error codes, idempotency.
 
 ---
