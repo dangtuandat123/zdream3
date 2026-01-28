@@ -1,15 +1,17 @@
 ﻿# Tài liệu dự án (Blueprint tổng quan)
 
-> Mục tiêu: mô tả dự án một cách **trung lập công nghệ**, đủ chi tiết để bất kỳ ai cũng có thể xây dựng lại hệ thống tương đương.
+> Mục tiêu: mô tả dự án một cách **trung lập công nghệ**, đủ chi tiết để bất kỳ ai cũng có thể xây dựng lại hệ thống tương đương.  
+> **Stack triển khai mục tiêu**: Laravel 12 (API) + ReactJS CSR (SPA).
 
 ---
 
 ## 1) Tổng quan dự án
 
-Nền tảng tạo ảnh AI cho người dùng phổ thông. Người dùng chọn **Style** (mẫu phong cách), chọn vài tùy chọn đơn giản, hệ thống tự ghép prompt và gọi API nhà cung cấp AI để tạo ảnh. Hệ thống có **ví nội bộ (credits/xu)**, lịch sử giao dịch, lịch sử ảnh và khu vực quản trị để cấu hình Style, model AI, giá, API key, v.v.
+Nền tảng tạo ảnh AI cho người dùng phổ thông. Người dùng chọn **Style** (mẫu phong cách), chọn vài tùy chọn đơn giản, hệ thống tự ghép prompt và gọi API nhà cung cấp AI để tạo ảnh. Hệ thống có **ví nội bộ (credits/xu)**, lịch sử giao dịch, lịch sử ảnh và khu vực quản trị để cấu hình Style, model AI, giá, API key, v.v.  
+Kiến trúc triển khai mục tiêu là **API‑first**: backend cung cấp API JSON; frontend là **SPA React CSR**.
 
 ### Công nghệ/tích hợp đang dùng và vai trò
-- **Backend (Laravel 12)**: xử lý API, xác thực, business logic, job queue, giao tiếp DB.
+- **Backend (Laravel 12)**: xử lý API, xác thực (Sanctum cho SPA), business logic, job queue, giao tiếp DB.
 - **Frontend (React CSR)**: giao diện SPA, tương tác realtime (polling), form/UX.
 - **MinIO (S3-compatible)**: lưu trữ ảnh, trả ảnh bằng pre‑signed URL.
 - **BFL (bfl.ai / FLUX)**: nhà cung cấp mô hình AI tạo ảnh.
@@ -47,15 +49,18 @@ Nền tảng tạo ảnh AI cho người dùng phổ thông. Người dùng ch�
    - (Tuỳ model) tải ảnh tham chiếu theo các **image slots**.
 4) Nhấn **Tạo ảnh**:
    - Hệ thống kiểm tra credits và validate dữ liệu.
-   - Trừ credits và tạo bản ghi `generated_images` trạng thái `processing`.
-   - Gửi job nền gọi API AI, lưu ảnh vào storage.
+   - Tạo bản ghi `generated_images` trạng thái `processing`, lưu `estimated_cost` (nếu có).
+   - Trừ credits theo **giá ước tính** hoặc giữ tạm (hold) nếu hỗ trợ.
+   - Gửi job nền gọi API AI, lưu `provider_task_id` và **`provider_polling_url`**.
+   - Khi nhận `cost` thực tế từ provider: reconcile chênh lệch (nếu có) và ghi log giao dịch.
 5) UI polling:
    - Thành công: hiển thị ảnh + lưu lịch sử.
-   - Thất bại/timeout: hoàn credits và hiển thị lỗi rõ ràng.
+   - Thất bại/timeout/moderated: hoàn credits (theo policy) và hiển thị lỗi rõ ràng.
 
 ### 3.2. Ví & nạp tiền
 - Người dùng xem **số dư** và lịch sử giao dịch gần nhất.
 - Hệ thống hỗ trợ **nạp tiền qua QR/chuyển khoản** (callback nội bộ).
+- Callback nạp tiền phải có **chữ ký/HMAC**, **idempotency key**, đối soát số tiền & nội dung.
 - Quy đổi VND ↔ credits dựa trên **cấu hình trong Settings**.
 
 ### 3.3. Lịch sử ảnh
@@ -84,14 +89,15 @@ Nền tảng tạo ảnh AI cho người dùng phổ thông. Người dùng ch�
 
 ### 4.3. Studio (tạo ảnh)
 - Thông tin Style, mô tả ngắn, giá.
+- **Giá dự kiến** (Estimated Cost): hiển thị realtime dựa trên model/option đang chọn; cập nhật **giá thực** khi có phản hồi từ provider.
 - Khối lựa chọn **options** theo nhóm (single‑select).
-- Ô nhập mô tả bổ sung (nếu Style cho phép).
-- Tuỳ chọn **dáng ảnh** (tỉ lệ) hoặc **kích thước tùy chỉnh**.
-- Tuỳ chọn nâng cao:
+- Ô nhập mô tả bổ sung (nếu Style cho phép). **Không hỗ trợ negative prompt**.
+- Tuỳ chọn **dáng ảnh** (tỉ lệ) hoặc **kích thước tùy chỉnh** (tuỳ model).
+- Tuỳ chọn nâng cao (chỉ hiện khi model hỗ trợ):
   - seed, steps, guidance, safety_tolerance, output_format, prompt_upsampling, raw, image_prompt_strength…
 - Khu vực upload ảnh tham chiếu theo các slot.
-- Trạng thái tạo ảnh: đang xử lý, hoàn thành, lỗi.
-- Hiển thị ảnh kết quả; cập nhật lịch sử của Style.
+- Trạng thái tạo ảnh: pending/processing/ready/failed/moderated.
+- Hiển thị ảnh kết quả qua URL nội bộ (proxy); nhắc **tải về** nếu cần.
 
 ### 4.4. Ví (Wallet)
 - Hiển thị số dư hiện tại.
@@ -146,7 +152,7 @@ Nền tảng tạo ảnh AI cho người dùng phổ thông. Người dùng ch�
 ## 6) Thiết kế hệ thống (trung lập công nghệ)
 
 ### 6.1. Kiến trúc lớp
-- **UI Layer**: trang server‑render + thành phần tương tác (reactive).
+- **UI Layer**: SPA React CSR, giao tiếp API JSON (API‑first), không phụ thuộc server‑render.
 - **Application Layer**: controller/handler xử lý request, xác thực, phân quyền.
 - **Domain/Service Layer**: dịch vụ tạo ảnh, ví, storage, quản trị model.
 - **Job Queue**: xử lý tác vụ tạo ảnh nền (async).
@@ -161,23 +167,35 @@ Nền tảng tạo ảnh AI cho người dùng phổ thông. Người dùng ch�
    - input hợp lệ (ratio/size/advanced).
    - ảnh tham chiếu đủ slot + đúng giới hạn.
 3) Trừ credits và ghi `generated_images` với `processing`.
-4) Gửi job nền:
-   - build prompt (base + options + input).
-   - gọi API AI: create task → polling → nhận ảnh.
-   - lưu ảnh vào storage, update `storage_path`.
-5) UI polling trạng thái ảnh:
-   - `completed` → trả URL.
-   - `failed` → hiển thị lỗi + hoàn credits nếu cần.
+4) **Xử lý Async (Job Queue)**:
+   - **Phase 1 (Submit)**: Build prompt -> Gọi API tạo task -> Lưu `provider_task_id` + **`provider_polling_url`** -> Dispatch `CheckResultJob` (delay 5s).
+   - **Phase 2 (Check)**: `CheckResultJob` gọi **`provider_polling_url`** để kiểm tra trạng thái:
+     - *Pending/Processing*: Release job lại vào queue (delay tiếp).
+     - *Ready*: Download ảnh (trong ~10 phút) -> Upload lên MinIO (Proxy) -> Update `storage_path` -> Mark `completed`.
+     - *Request Moderated/Content Moderated*: Update lỗi -> Hoàn credits theo policy -> Mark `failed`.
+     - *Task not found/Error*: Retry có giới hạn -> quá số lần thì mark `failed` + refund theo policy.
+5) UI polling trạng thái ảnh (từ Backend):
+   - `completed` → trả URL nội bộ (MinIO).
+   - `failed` → hiển thị lỗi chi tiết.
 6) Watchdog timeout: nếu quá lâu → mark failed + refund.
 
 ### 6.3. Prompt & tham số
 - **Prompt cuối** = `base_prompt` + `prompt_fragment` từ options + mô tả user (nếu cho phép).
-- Giới hạn độ dài prompt (tránh API reject).
-- Tham số nâng cao chỉ hiển thị khi model hỗ trợ.
+- **Không hỗ trợ negative prompt** (FLUX chỉ dùng prompt dương).
+- Ưu tiên **word order**: subject → action → style → context.
+- Giới hạn độ dài prompt theo model (vd: Kontext ~512 tokens).
+- Tham số nâng cao chỉ hiển thị khi model hỗ trợ (capabilities-driven UI).
 - Kích thước ảnh:
   - Ưu tiên **aspect ratio** nếu model hỗ trợ.
   - Nếu model chỉ hỗ trợ width/height: hệ thống map ratio → kích thước.
   - Kích thước tuân thủ giới hạn min/max/multiple theo model.
+
+### 6.4. Xác thực SPA (Laravel Sanctum)
+- SPA **bắt buộc** gọi `/sanctum/csrf-cookie` trước khi login.
+- Login qua `/login` (web guard), sau đó dùng session cookie để gọi API.
+- CORS: `supports_credentials=true`, cấu hình `stateful` domains đúng host/port.
+- Frontend gửi `withCredentials` + `X-XSRF-TOKEN`.
+- Route API bảo vệ bằng `auth:sanctum`.
 
 ---
 
@@ -186,7 +204,7 @@ Nền tảng tạo ảnh AI cho người dùng phổ thông. Người dùng ch�
 ### 7.1. Hợp đồng API (mô tả chức năng)
 - **Tạo task**: gửi payload gồm prompt + tham số (ratio/size/seed/…).
 - **Nhận task_id + polling_url**.
-- **Polling kết quả**:
+- **Polling kết quả (bắt buộc dùng `polling_url` trả về)**:
   - Trạng thái Ready → nhận ảnh (base64/URL).
   - Trạng thái Failed/Moderated/Not Found → trả lỗi.
 - Có **backoff** khi gặp rate‑limit.
@@ -195,6 +213,21 @@ Nền tảng tạo ảnh AI cho người dùng phổ thông. Người dùng ch�
 - Hỗ trợ nhiều input images nếu model cho phép.
 - Có thể gửi ảnh dạng **base64** hoặc **URL**.
 - Hạn chế tổng dung lượng payload và chặn URL nội bộ (SSRF).
+- Giới hạn số lượng ảnh theo model (vd: Flux2 pro/flex/max tối đa 8; klein tối đa 4).
+
+### 7.3. Quy tắc bắt buộc khi tích hợp BFL/FLUX
+- **Luôn dùng `polling_url`** trả về từ API (không tự build URL).
+- `result.sample` **hết hạn nhanh** (~10 phút) và **không CORS** ⇒ phải download ngay và re‑serve qua Storage/CDN nội bộ.
+- Rate limit: **tối đa 24 task đồng thời**, riêng `flux-kontext-max` **tối đa 6** ⇒ throttle theo model + exponential backoff cho 429.
+- Xử lý lỗi chuẩn: 402 (hết credits), 429 (rate limit), 5xx (retry có giới hạn).
+- `cost`/`input_mp`/`output_mp` trả về dùng để reconcile credits và hiển thị giá thực.
+
+### 7.4. Mapping trạng thái provider → hệ thống
+- `Pending/Processing` → `processing`
+- `Ready` → `completed`
+- `Request Moderated` / `Content Moderated` → `failed` (message rõ ràng)
+- `Task not found` → retry có giới hạn, sau đó `failed`
+- `Error` → `failed` + log chi tiết
 
 ---
 
@@ -211,6 +244,7 @@ Nền tảng tạo ảnh AI cho người dùng phổ thông. Người dùng ch�
 - `provider_model_id` (cột hiện tại: `bfl_model_id`), `legacy_provider_model_id` (cột hiện tại: `openrouter_model_id`).
 - `base_prompt`, `config_payload` (JSON).
 - `is_active`, `allow_user_custom_prompt`, `sort_order`.
+- `capabilities` (JSON): lưu cờ tính năng (vd: `{"supports_aspect_ratio": true, "supports_wh": false}`).
 - `image_slots` (JSON), `system_images` (JSON).
 - `tag_id`.
 
@@ -226,7 +260,8 @@ Nền tảng tạo ảnh AI cho người dùng phổ thông. Người dùng ch�
 - `user_id`, `style_id`.
 - `final_prompt`, `selected_options` (JSON), `user_custom_input`.
 - `generation_params` (JSON).
-- `storage_path`, `provider_task_id` (cột hiện tại: `bfl_task_id`), `legacy_provider_task_id` (cột hiện tại: `openrouter_id`).
+- `estimated_cost` (khuyến nghị).
+- `storage_path`, `provider_task_id` (cột hiện tại: `bfl_task_id`), `provider_polling_url` (khuyến nghị), `provider_cost` (khuyến nghị), `legacy_provider_task_id` (cột hiện tại: `openrouter_id`).
 - `status` (`pending|processing|completed|failed`), `error_message`.
 - `credits_used`, timestamps, soft delete.
 
@@ -251,6 +286,10 @@ Các cấu hình nên đặt trong **settings** hoặc môi trường vận hàn
 - Bảng danh sách model + capabilities (supports ratio, size, seed…).
 - Cấu hình tỉ lệ quy đổi tiền → credits.
 - Giới hạn kích thước ảnh, dung lượng upload.
+- **Provider Rate Limit**: Giới hạn số lượng task đồng thời (vd: max 24 tasks cho BFL, `flux-kontext-max` max 6). Cần cơ chế throttle ở Queue.
+- **Image Proxy**: Bắt buộc proxy ảnh qua Storage nội bộ (tránh lỗi CORS và link hết hạn).
+- Storage: cấu hình **S3/MinIO disk**, TTL pre‑signed URL, CDN (nếu có).
+- Prompt limit theo model (vd: Kontext ~512 tokens).
 - Thông tin nạp tiền (ngân hàng, QR, nội dung chuyển khoản).
 - Số ngày ảnh có thể hết hạn/hiển thị cảnh báo.
 
@@ -262,6 +301,7 @@ Các cấu hình nên đặt trong **settings** hoặc môi trường vận hàn
 - Nội dung ảnh từ URL cần chống SSRF.
 - API nội bộ yêu cầu **secret key** và có **rate‑limit**.
 - Idempotency cho giao dịch nạp tiền và refund.
+- Không lưu API keys/secrets trong repo; dùng `.env`/secret manager, rotate định kỳ.
 
 ---
 
@@ -273,14 +313,15 @@ Các cấu hình nên đặt trong **settings** hoặc môi trường vận hàn
   - settings (giảm query).
   - danh sách model/capabilities.
   - pre‑signed URL ảnh (giảm request storage).
-- Ảnh lưu trên storage riêng, truy cập bằng URL tạm thời.
+- Ảnh lưu trên storage riêng, truy cập bằng URL tạm thời; download từ provider ngay khi Ready.
+- Throttle queue theo model để tránh 429/timeout.
 
 ---
 
 ## 12) Gợi ý tái xây dựng dự án tương đương
 
 1) Chọn một **backend MVC + ORM**.
-2) Chọn **UI server‑render + reactive components** hoặc SPA.
+2) Chọn **SPA CSR (React)** theo kiến trúc API‑first.
 3) Chuẩn bị:
    - Database quan hệ (schema như phần 8).
    - Queue worker cho job tạo ảnh.
@@ -294,16 +335,25 @@ Các cấu hình nên đặt trong **settings** hoặc môi trường vận hàn
 
 ---
 
-## 13) Checklist chức năng cốt lõi
+## 13) API nội bộ (khung đề xuất)
+
+- Tối thiểu cần các nhóm endpoint: Style (list/detail), Studio (create/poll), History, Wallet (balance/topup/callback), Admin (CRUD).
+- Mỗi endpoint cần mô tả: method, path, auth, request/response, error codes, idempotency.
+
+---
+
+## 14) Checklist chức năng cốt lõi
 
 - [ ] Duyệt Style: search/filter/sort/pagination.
 - [ ] Studio: chọn options, upload ảnh tham chiếu, tạo ảnh.
 - [ ] Async generation + polling + xử lý lỗi.
+- [ ] Auth SPA (Sanctum) + CORS + CSRF cookie.
 - [ ] Ví: số dư, nạp tiền, lịch sử giao dịch.
 - [ ] Lịch sử ảnh: xem/tải/xoá.
 - [ ] Admin: quản lý Style/Option/Tag/Users/Settings.
 - [ ] API nội bộ: adjust wallet + payment callback.
+- [ ] BFL: dùng polling_url, download & re‑serve, rate‑limit/backoff.
 
 ---
 
-Tài liệu này mô tả **logic và kiến trúc** thay vì phụ thuộc vào một stack cụ thể. Khi triển khai thực tế, bạn có thể chọn bất kỳ framework/libraries phù hợp nhưng vẫn đảm bảo các luồng, dữ liệu và hành vi giữ nguyên như mô tả trên.
+Tài liệu này ưu tiên mô tả **logic và kiến trúc**. Stack mục tiêu đã nêu ở phần đầu; nếu thay đổi công nghệ, vẫn cần đảm bảo các luồng, dữ liệu và hành vi giữ nguyên như mô tả trên.
