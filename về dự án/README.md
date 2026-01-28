@@ -202,6 +202,16 @@ Kiến trúc triển khai mục tiêu là **API‑first**: backend cung cấp AP
   - Nếu model chỉ hỗ trợ width/height: hệ thống map ratio → kích thước.
   - Kích thước tuân thủ giới hạn min/max/multiple theo model.
 
+### 6.6. Hướng dẫn prompt (tóm tắt từ guides)
+- Cấu trúc khuyến nghị: **Subject + Action + Style + Context**.
+- Độ dài: **10–30** (ngắn), **30–80** (tối ưu), **80+** (phức tạp).
+- **No negative prompts** → mô tả điều muốn thấy (positive framing).
+- Hỗ trợ **JSON structured prompts** (khi cần kiểm soát chi tiết).
+- Hỗ trợ **hex color** (vd: `color #FF5733`) cho brand‑match.
+- Hỗ trợ **typography**: đặt chữ trong ngoặc kép và mô tả vị trí/font.
+- Hỗ trợ **đa ngôn ngữ** prompt.
+- Với **FLUX.2 [klein]**: prompt kiểu văn xuôi, mô tả ánh sáng rõ.
+
 ### 6.4. Xác thực SPA (Laravel Sanctum)
 - SPA **bắt buộc** gọi `/sanctum/csrf-cookie` trước khi login.
 - Login qua `/login` (web guard), sau đó dùng session cookie để gọi API.
@@ -251,6 +261,20 @@ Kiến trúc triển khai mục tiêu là **API‑first**: backend cung cấp AP
 - `Request Moderated` / `Content Moderated` → `failed` (message rõ ràng)
 - `Task not found` → retry có giới hạn, sau đó `failed`
 - `Error` → `failed` + log chi tiết
+
+### 7.5. Phạm vi hỗ trợ đầy đủ tính năng BFL (theo guides)
+- **Text‑to‑Image** (t2i): đầy đủ model hiện có.
+- **Image‑to‑Image** (i2i): multi‑reference (tối đa theo model).
+- **Inpainting** (Fill) với mask hoặc alpha.
+- **Outpainting** (Expand) theo top/bottom/left/right.
+- **Kontext**: chỉnh sửa ảnh + **text editing** (Replace 'old' with 'new'), hỗ trợ annotation boxes.
+- **FLUX.2**: multi‑reference, pose guidance, exact color matching, typography.
+- **Grounding search**: chỉ khi model hỗ trợ (vd: FLUX.2 [max]).
+- **Prompt upsampling**: chỉ khi model hỗ trợ.
+- **Raw mode**: chỉ khi model hỗ trợ.
+- **Webhooks**: hỗ trợ nhận kết quả async (nếu bật).
+
+> Mọi capability được bật/tắt theo **model schema** lấy từ provider; UI/Backend không hardcode.
 
 ---
 
