@@ -223,6 +223,7 @@ Kiến trúc triển khai mục tiêu là **API‑first**: backend cung cấp AP
 - Backend định kỳ **sync danh sách model + schema tham số** từ provider (không hardcode).
 - Sinh **capability matrix** để UI hiển thị đúng controls theo model.
 - Cache danh sách model; fallback dùng bản gần nhất nếu provider lỗi.
+- Tham chiếu baseline chi tiết: `MODEL_CAPABILITIES.md` (dữ liệu thực tế vẫn lấy từ provider).
 
 ---
 
